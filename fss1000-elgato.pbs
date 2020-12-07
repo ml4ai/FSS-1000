@@ -31,7 +31,8 @@ module load singularity/3.6.4
 /groups/claytonm/arete-realsim/containers/ubuntu18_torch_torchvision_opencv_cuda10.sif
 
 ### NOTE: You must update the SCRIPT_PATH to your context
-SCRIPT_ROOT=/home/u32/usg/FSS-1000
+# SCRIPT_ROOT=/home/u32/usg/FSS-1000
+SCRIPT_ROOT=/home/u25/claytonm/projects/FSS-1000
 
 DATA_ROOT=/xdisk/claytonm/project/arete-realsim/data
 OUTPUT_ROOT=/xdisk/claytonm/projects/arete-realsim/results
