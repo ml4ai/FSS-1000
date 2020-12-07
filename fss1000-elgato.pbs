@@ -4,7 +4,7 @@
 #### PART 1: Requests resources to run your job.
 # --------------------------------------------------------------
 ### Set the job name (needed for job lookup)
-#PBS -N fss1000
+#PBS -N _fss1000
 ### Specify the PI group for this job (always claytonm)
 #PBS -W group_list=claytonm
 ### Set the queue for your job (options: windfall, standard, high_priority, debug -- only on Ocelote)
