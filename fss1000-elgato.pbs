@@ -28,15 +28,17 @@ module load singularity/3.6.4
 #module load singularity/3/3.6.4
 
 ### Define path to singularity image that we will use for running commands
-/groups/claytonm/arete-realsim/containers/ubuntu18_torch_torchvision_opencv_cuda10.sif
+CONTAINER=/groups/claytonm/arete-realsim/containers/ubuntu18_torch_torchvision_opencv_cuda10.sif
 
 ### NOTE: You must update the SCRIPT_PATH to your context
 # SCRIPT_ROOT=/home/u32/usg/FSS-1000
-SCRIPT_ROOT=/home/u25/claytonm/projects/FSS-1000
+# SCRIPT_ROOT=/home/u25/claytonm/projects/FSS-1000
+SCRIPT_ROOT=/home/u11/seanmhendryx/realsim/FSS-1000
 
 DATA_ROOT=/xdisk/claytonm/project/arete-realsim/data
 OUTPUT_ROOT=/xdisk/claytonm/projects/arete-realsim/results
 
 ### Run commands in the singularity container using exec.
-$SCRIPT_ROOT
-singularity exec $CONTAINER python3 autolabel.py -sd imgs/example/support -td imgs/example/query ##--data-file=$DATA_ROOT --output-root=$OUTPUT_ROOT --gen-output-timestamp
+cd $SCRIPT_ROOT
+singularity exec $CONTAINER python3 autolabel_hpc.py --output_root=$OUTPUT_ROOT
+# If not specifying path to input data, this example will just run on the example images shipped with the repo.
