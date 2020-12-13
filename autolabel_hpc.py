@@ -1,3 +1,5 @@
+import time
+import warnings
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,18 +33,25 @@ parser.add_argument("-g", "--gpu", type=int, default=0)
 parser.add_argument("-u", "--hidden_unit", type=int, default=10)
 parser.add_argument("-d", "--display_query_num", type=int, default=5)
 parser.add_argument("-t", "--test_class", type=int, default=1)
-parser.add_argument("-modelf", "--feature_encoder_model", type=str, default='models/feature_encoder.pkl')
-parser.add_argument("-modelr", "--relation_network_model", type=str, default='models/relation_network.pkl')
+parser.add_argument("-modelf", "--feature_encoder_model", type=str, default='pretrained_model/feature_encoder.pkl')
+parser.add_argument("-modelr", "--relation_network_model", type=str, default='pretrained_model/relation_network.pkl')
+parser.add_argument(
+    "--use-cuda", action="store_true", help="Use CUDA if available."
+)
+parser.add_argument("--output_root", help="path to results directory (hpc on default)", default = '/xdisk/claytonm/projects/arete-realsim/results')
 
 # Modified: changed defaults
 parser.add_argument("-sd", "--support_dir", type=str, default='imgs/example/support')  # default modified
 parser.add_argument("-td", "--test_dir", type=str, default='imgs/example/query')       # default modified
 
 args = parser.parse_args()
+args.device = torch.device(
+    "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"
+)
 
-os.environ["CUDA_VISIBLE_DEVICES"]=str(np.argmax( [int(x.split()[2]) \
-                                    for x in subprocess.Popen("nvidia-smi -q -d Memory |\
-                                    grep -A4 GPU | grep Free", shell=True, stdout=subprocess.PIPE).stdout.readlines()] ))
+# os.environ["CUDA_VISIBLE_DEVICES"]=str(np.argmax( [int(x.split()[2]) \
+#                                     for x in subprocess.Popen("nvidia-smi -q -d Memory |\
+#                                     grep -A4 GPU | grep Free", shell=True, stdout=subprocess.PIPE).stdout.readlines()] ))
 
 # Hyper Parameters
 FEATURE_DIM = args.feature_dim
@@ -339,48 +348,46 @@ def main():
     feature_encoder = CNNEncoder()
     relation_network = RelationNetwork()
 
-    feature_encoder.cuda(GPU)
-    relation_network.cuda(GPU)
+    if args.use_cuda:
+        feature_encoder.cuda(GPU)
+        relation_network.cuda(GPU)
 
     if os.path.exists(FEATURE_MODEL):
-        feature_encoder.load_state_dict(torch.load(FEATURE_MODEL))
-        print("load feature encoder success")
+        if args.use_cuda:
+            feature_encoder.load_state_dict(torch.load(FEATURE_MODEL))
+            print("loaded CUDA-enabled feature encoder")
+        else:
+            feature_encoder.load_state_dict(torch.load(FEATURE_MODEL, map_location=torch.device('cpu')))
+            print("loaded CPU feature encoder")
     else:
         raise Exception('Can not load feature encoder: %s' % FEATURE_MODEL)
     if os.path.exists(RELATION_MODEL):
-        relation_network.load_state_dict(torch.load(RELATION_MODEL))
-        print("load relation network success")
+        if args.use_cuda:
+            relation_network.load_state_dict(torch.load(RELATION_MODEL))
+            print("loaded GPU relation network")
+        else:
+            relation_network.load_state_dict(torch.load(RELATION_MODEL, map_location=torch.device('cpu')))
+            print("loaded CPU relation network")
     else:
         raise Exception('Can not load relation network: %s' % RELATION_MODEL)
 
     print("Testing...")
     meaniou = 0
     classname = args.support_dir
-    
-    # Modified: change relative path to results directory (hpc equivalent)
-    output_root = '/xdisk/claytonm/projects/arete-realsim/results' 
+
+    output_root = args.output_root
     if os.path.exists(output_root):
-        os.system(f'rm -r {output_root}')
+        # raise RuntimeError(f"ouput_root exists. Make sure to write results of each experiment in unique dir {output_root}")
+        output_root = os.path.join(output_root, str(time.time()))
+        os.makedirs(output_root)
+        warnings.warn(
+            f"ouput_root exists. Created subdirectory {output_root}")
     if not os.path.exists(output_root):
         os.makedirs(output_root)
     if not os.path.exists(f'{output_root}/{classname}'):
         os.makedirs(f'{output_root}/{classname}')
-    
-    """
-    if os.path.exists('result1'):
-        os.system('rm -r result1')
-    if os.path.exists('result.zip'):
-        os.system('rm result.zip')
-    if not os.path.exists('result1'):
-        os.makedirs('result1')
-    if not os.path.exists('./result1/%s' % classname):
-        os.makedirs('./result1/%s' % classname)
-   """
+
     stick = np.zeros((224*4, 224*5, 3), dtype=np.uint8)
-    support_image = np.zeros((5, 3, 224, 224), dtype=np.float32)
-    support_label = np.zeros((5, 1, 224, 224), dtype=np.float32)
-    supp_demo = np.zeros((224, 224*5, 3), dtype=np.uint8)
-    supplabel_demo = np.zeros((224, 224*5, 3), dtype=np.uint8)
 
     testnames = os.listdir('%s' % args.test_dir)
     print ('%s testing images in class %s' % (len(testnames), classname))
@@ -395,10 +402,17 @@ def main():
         samples, sample_labels, batches, batch_labels = get_oneshot_batch(testname)
 
         # forward
-        sample_features, _ = feature_encoder(Variable(samples).cuda(GPU))
-        sample_features = sample_features.view(CLASS_NUM,SAMPLE_NUM_PER_CLASS, 512, 7, 7)
+        if args.use_cuda:
+            var = Variable(samples).cuda(GPU)
+        else:
+            var = Variable(samples)
+        sample_features, _ = feature_encoder(var)
+        sample_features = sample_features.view(CLASS_NUM, SAMPLE_NUM_PER_CLASS, 512, 7, 7)
         sample_features = torch.sum(sample_features, 1).squeeze(1)  # 1*512*7*7
-        batch_features, ft_list = feature_encoder(Variable(batches).cuda(GPU))
+        if args.use_cuda:
+            batch_features, ft_list = feature_encoder(Variable(batches).cuda(GPU))
+        else:
+            batch_features, ft_list = feature_encoder(Variable(batches))
         sample_features_ext = sample_features.unsqueeze(0).repeat(BATCH_NUM_PER_CLASS*CLASS_NUM, 1, 1, 1, 1)
         batch_features_ext = batch_features.unsqueeze(0).repeat(CLASS_NUM, 1, 1, 1, 1)
         batch_features_ext = torch.transpose(batch_features_ext, 0, 1)
@@ -425,7 +439,11 @@ def main():
             classiou += iou
         classiou /= 5.0
 
-        # visulization
+        # visualization
+        # Modified: created a new directory for classname
+        os.makedirs(f'{output_root}/{classname}', exist_ok=True)
+        os.makedirs(f'{output_root}/{classname}', exist_ok=True)
+
         if cnt == 0:
             for i in range(0, samples.size()[0]):
                 suppimg = np.transpose(samples.numpy()[i][0:3], (1, 2, 0))[:, :, ::-1] * 255
@@ -434,21 +452,18 @@ def main():
                 supplabel = (supplabel * 255).astype(np.uint8)
                 suppedge = cv2.Canny(supplabel, 1, 1)
 
-                cv2.imwrite('./result1/%s/supp%s.png' %
-                            (classname, i),
+                cv2.imwrite(f'{output_root}/{classname}/supp{i}.png',
                             maskimg(suppimg, supplabel.copy()[:, :, 0], suppedge, color=[0, 255, 0]))
+                print(f"wrote support predictions to f'{output_root}/{classname}/supp{i}.png'")
 
         # should these go here?
         testimg = np.transpose(batches.numpy()[0][0:3], (1, 2, 0))[:, :, ::-1] * 255
         testlabel = stick[224*3:224*4, 224*i:224*(i+1), :].astype(np.uint8)
         testedge = cv2.Canny(testlabel, 1, 1)
 
-        # Modified: created a new directory for classname
-        Path(f'{output_root}/{classname}/test{cnt}s_raw.png').makedir(parents=True, exists_ok=False)
-        Path(f'{output_root}/{classname}/test{cnt}s.png').makedirs(parents=True, exists_ok=False)
-
         cv2.imwrite(f'{output_root}/{classname}/test{cnt}s_raw.png', testimg)  # raw image
         cv2.imwrite(f'{output_root}/{classname}/test{cnt}s.png', maskimg(testimg, testlabel.copy()[:, :, 0], testedge))
+        print(f"wrote query predictions to {output_root}/{classname}/test{cnt}s.png'")
 
 
 if __name__ == '__main__':
