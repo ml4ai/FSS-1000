@@ -7,8 +7,6 @@ References:
 """
 import argparse
 import random
-import time
-import warnings
 from typing import Union, List
 
 import torch
@@ -55,8 +53,6 @@ class CNNEncoder(nn.Module):
             nn.Conv2d(4, 64, kernel_size=3, padding=1)
         )
         self.features = nn.ModuleList(features)[1:]  # .eval()
-        # print (nn.Sequential(*list(models.vgg16_bn(pretrained=True).children())[0]))
-        # self.features = nn.ModuleList(features).eval()
 
     def forward(self, x):
         results = []
@@ -256,13 +252,11 @@ def forward(feature_encoder, relation_network, support_images_tensor, query_imag
 def evaluate_predictions(predictions, labels):
     pred = predictions.data.cpu().numpy()
     ious = []
-    # for i in n_images:
-    i = 0
     pred[pred <= 0.5] = 0
     pred[pred > 0.5] = 1
-    testlabel = labels.numpy()[i][0].astype(bool)
+    testlabel = labels.numpy()[0][0].astype(bool)
     pred = pred.astype(bool)
-    # compute IOU
+    # Compute IOU
     overlap = testlabel * pred
     union = testlabel + pred
     iou = overlap.sum() / float(union.sum())
