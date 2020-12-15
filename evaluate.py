@@ -208,7 +208,7 @@ def get_one_test_shot_batch(data_dir: str, k: int = 5, class_num: int = 1):
     # Randomly sample k support tuples
     random.shuffle(images_labels)
     images_labels = [(np.transpose(cv2.imread(i)[:, :, ::-1] / 255., (2, 0, 1)), cv2.imread(l)[:, :, 0]) for i, l in images_labels]
-    images_labels = [(i, l) for i, l in images_labels if i.shape[1] == 224 and i.shape[2] == 224 and l.shape[0] == 22 and l.shape[1] == 224]
+    images_labels = [(i, l) for i, l in images_labels if i.shape[1] == 224 and i.shape[2] == 224 and l.shape[0] == 224 and l.shape[1] == 224]
     assert k <= len(images_labels) - test_shots
 
     support_image_labels = images_labels[:k]
