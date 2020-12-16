@@ -198,7 +198,7 @@ def forward(
     return output
 
 
-def evaluate_predictions(predictions, labels):
+def evaluate_predictions(predictions, labels, iou_as_percentage = True):
     pred = predictions.data.cpu().numpy()
     ious = []
     pred[pred <= 0.5] = 0
@@ -209,7 +209,9 @@ def evaluate_predictions(predictions, labels):
     overlap = testlabel * pred
     union = testlabel + pred
     iou = overlap.sum() / float(union.sum())
-    print("iou=%0.4f" % iou)
+    if iou_as_percentage:
+        iou *= 100
+    print("iou=%0.2f" % iou)
     ious.append(iou)
     return ious
 
@@ -255,7 +257,7 @@ def main():
             ious.extend(evaluate_predictions(predictions, query_labels_tensor))
 
     # Report mean and 95% CI:
-    print(f"Mean IoU +- 95% CI: {np.nanmean(ious)} +- {ci95(ious)}")
+    print(f"Mean IoU: {np.nanmean(ious):.2f} +/- {ci95(ious):.2f}")
 
 
 if __name__ == "__main__":
